@@ -62,6 +62,12 @@
                    
                 Also fixed problem with ParI bad format float vs int (causing error if ParI used)
   
+ Nov 1,2020     Ctrl-A not working  Default A
+                Improved lock onto item when mouse down -- if drift off to new item keep lock on 
+                original. Hover did not discriminate previously.
+                Also prevent new item being selected while mouseDownL
+                Still some minor issues with leaving window and returning, 
+                
    
 */
 
@@ -122,7 +128,10 @@ class ParEditor {
   boolean requestLoad;
   boolean loadActive;
   
-  int notAvailNoticeTime;    
+  int notAvailNoticeTime;  
+  boolean setAllDefaults;      // make action more clear with variable (previously parCurIndex=-1 was used)
+  
+ 
   
   void statusMessage(String s)
   {
@@ -150,7 +159,7 @@ class ParEditor {
  
   ParEditor()   // constructor  
   {
-    parCurIndex = -1;   // first pass through param list will set var defaults
+    setAllDefaults = true;   // first pass through param list will set var defaults
    
     int yp = 650;                    // position on 1800x900 display 
     if (height >1070) yp += 70;      // slight tweak on position on 1080 display 
@@ -163,11 +172,13 @@ class ParEditor {
   
   void beginList () {
  
+      
     pushStyle();
     pushMatrix();
     resetMatrix();
     camera();
    
+       
     if (requestSave) 
     {  saveActive = true;  //  make sure synchronized with start of list
        paramFile = createWriter(dataPath("param.cdf"));
@@ -179,14 +190,10 @@ class ParEditor {
     { loadActive = true;
       requestLoad = false;
     }
-      
-    if (parCurIndex == -1)
-    {
-     // parVPY = panelPosY;  // se UserDrawPanel, made panelPosY public 
-    }
-    
+       
     parIndex = 0;
     
+       
     if (visible) 
     {
    
@@ -217,7 +224,7 @@ class ParEditor {
       mouseInCloseBox = (mouseX>parVP.x+parVP.w-30) && (mouseX<parVP.x+parVP.w-30+22) &&
                         (mouseY>parVP.y+8)          && (mouseY<parVP.y+8+22);
       fill (240);
-      text ("x",parVP.x+parVP.w-29,parVP.y+28);
+      text ("x",parVP.x+parVP.w-26, parVP.y+25);
     
       
       fill (240);
@@ -246,7 +253,8 @@ class ParEditor {
     
   void endList() {   // call at end defined list of params  -- allows for completion of Init
     parCount = parIndex;
-    if (parCurIndex== -1) parCurIndex = 0;  // done with init 
+    if (setAllDefaults) parCurIndex = 0;  // done with init
+    setAllDefaults = false;
     
     if (saveActive)
     {
@@ -261,7 +269,9 @@ class ParEditor {
    
   float parF(float v, String vname, String id, float defaultV, float minV, float maxV, float deltaV)
   {
-    if (notAvailNoticeTime != 0) return v;  // contest running, param dialog not available
+    if (setAllDefaults) { return defaultV; } // initialization pass 
+    if (notAvailNoticeTime != 0) return v;   // contest running, param dialog not available
+  
     
     
     if (loadActive)
@@ -290,19 +300,21 @@ class ParEditor {
  
    // limit visible to parPageSize with TopIndex controlled by PgUp PgDn
     
+    
    if (visible && (parIndex>=parPageTopIndex) && (parIndex<parPageTopIndex+parPageSize))
    {
      String txt =  String.format("%s  %s  = %1.2f",vname,id,v);
+     //String txt = String.format ("parIndex %d parPageTopIndex %d",parIndex,parPageTopIndex);  // diagnostic 
+     
      if (textBox(txt,posN,txtVP.x,txtVP.y+(parIndex+1-parPageTopIndex)*txtVPLineH,txtVP.w,txtVP.h))      // return true if mouse clicked in box
      {
-       parCurIndex = parIndex;
-     }
-     else parCurIndex = -99;  // New Oct 22, 2020  
+      if (!mouseDownL) parCurIndex = parIndex;     // if init pass (setting defaults) don't modify parCurIndex
+     } 
+     else if (!mouseDownL) parCurIndex = -99;  // New Oct 22, 2020  
     
    }
-   
-   if (parCurIndex == -1) { return defaultV; }  // special case before first parEnd() call -- set defaults 
-   else if (parCurIndex == parIndex)            // this is the parameter we want to edit
+    
+   if (parCurIndex == parIndex)            // this is the parameter we want to edit
    {
      if (curKey == '+') v+=deltaV*deltaMult;
      if (curKey == '-') v-=deltaV*deltaMult;
@@ -330,13 +342,14 @@ class ParEditor {
      
      if (mouseDownL)
      {
-      float d = ((mouseX-mouseXOnPressL)*dv/(width*0.5));  // change 
+      // float d = ((mouseX-mouseXOnPressL)*dv/(width*0.5));      // previous 
+      float d = ((mouseX-mouseXOnPressL)*(maxV-minV)/parVP.w);    // changed scale to panel width (lib 1.6.1)
+      
       v = mouseInitialValueL + floor(d/deltaV) *deltaV;
      }
     
       //  1 to 10 delta v = 0.1          +  0.08          
         
-     //curCmd = 0;
      
      if (v>maxV) v=maxV;
      if (v<minV) v=minV;
@@ -355,6 +368,7 @@ class ParEditor {
    
  int parI(int v, String vname, String id, int defaultV, int minV, int maxV)  // integer parameter  val = parI (val,default,min,max)
  {
+    if (setAllDefaults) { return defaultV; } // initialization pass 
     if (notAvailNoticeTime != 0) return v;  // contest running, param dialog not available
     if (loadActive)
     {
@@ -374,19 +388,16 @@ class ParEditor {
     int dv = maxV-minV;       
     float posN = 1.0*(v-minV)/dv;  // normalized position 
    
-   if (visible) 
+   if (visible && (parIndex>=parPageTopIndex) && (parIndex<parPageTopIndex+parPageSize)) 
    {
      String txt =  String.format("%s  %s  = %d",vname,id,v);   // Oct 22, 2020  changed to int %d
      if (textBox(txt,posN,txtVP.x,txtVP.y+(parIndex+1-parPageTopIndex)*txtVPLineH,txtVP.w,txtVP.h))      // return true if mouse clicked in box
-     {
-       parCurIndex = parIndex;
-   
-     }
-     else parCurIndex = -99;  // New Oct 22,2020   
+      if (!mouseDownL) parCurIndex = parIndex;
+     else if (!mouseDownL) parCurIndex = -99;  // New Oct 22,2020   
    }
    
-   if (parCurIndex == -1) { return defaultV; }  // special case before first parEnd() call -- set defaults 
-   else if (parCurIndex == parIndex)
+  
+   if (parCurIndex == parIndex)
    {
      
      if (curKey == '+') v+=deltaMult;
@@ -412,11 +423,8 @@ class ParEditor {
      // results in full scale change of v
      
      if (mouseDownL)
-      v = (int) mouseInitialValueL + ((mouseX-mouseXOnPressL)*dv/(width/2));  
+     v = (int) mouseInitialValueL + ((mouseX-mouseXOnPressL)*(maxV-minV)/parVP.w);  // scale control to panel width (lib 1.6.1)
        
-           
-    // curCmd = 0;
-     
      if (v>maxV) v=maxV;
      if (v<minV) v=minV;
      
@@ -434,35 +442,40 @@ class ParEditor {
  }
  
   
-  void processKey(char k, int kcode)
+  boolean processKey(char k, int kcode)
   { 
+   
+   
     if (lfs.contestIsRunning())
     {
-      if (k=='P') { notAvailNoticeTime = millis(); visible = true; }     
-      return;
-    }  
+      if (k=='P') 
+      { notAvailNoticeTime = millis(); visible = true; return false; }
+      
+    } 
+   
+    if  (k=='P')
+    { visible = !visible;
+      return true;
+    }
     
-    if (k == 'P') parEditor.visible = !parEditor.visible;
-    
-    if (!visible) return;  // skip decode if panel not visible
+    if (!visible) return false;  // skip decode if panel not visible
     
     curKey = k; // used for decode within parF parI methods for current parameter.
       
-   if (kcode == 16) parPageTopIndex -= parPageSize;   // KeyEvent.VK_PAGE_UP   - not accessible
+   if (kcode == 16)
+    parPageTopIndex -= parPageSize;   // KeyEvent.VK_PAGE_UP   - not accessible
+   else
    if (kcode == 11) parPageTopIndex += parPageSize;   // KeyEvent.VK_PAGE_DOWN
- 
-   // keep in limits based on number of items 
-   if (parPageTopIndex < 0) parPageTopIndex = 0;
-   if (parPageTopIndex >= parCount) parPageTopIndex -= parPageSize; 
-   
+   else 
    if (k == 'A'-64)
-   { parCurIndex = -1;    // ctrl-A default ALL
+   { setAllDefaults = true;    // ctrl-A default ALL
      statusMessage("Set ALL parameters to default values");
    }
-   
+   else
    if (k == 'D'-64) requestDefault = true;  // set default on current variable, next time   
-  
+   else
    if (k == 'S'-64) requestSave = true;
+   else
    if (k == 'L'-64) 
    {
      paramLines = loadStrings(dataPath("param.cdf"));
@@ -475,6 +488,14 @@ class ParEditor {
      } 
       
    }
+   else return false;
+   
+   // keep page index in limits 
+   
+   if (parPageTopIndex < 0) parPageTopIndex = 0;
+   if (parPageTopIndex >= parCount) parPageTopIndex -= parPageSize; 
+   
+   return true; // processed key 
    
    
       
@@ -528,8 +549,18 @@ class ParEditor {
      fill (60);
      rect (x,y,posN*w,h);
   
-     if (mouseInBox) fill (100,255,100);
-     else fill (130);
+     // Nov 1, 2020 do have case where mouse L pressed on given item then while adjusting with left / right motion
+     // mouse drifts to new item changing hover item.
+     // locked currentIndex during this time, but need to lock hover item
+  
+     if (mouseDownL)
+     { if (parCurIndex == parIndex) fill (100,255,100);
+       else fill(130);
+     }  
+     else
+     { if  (mouseInBox) fill (100,255,100);     // hover color 
+       else fill (130);                         // not hover color
+     } 
      
      textSize(parTextSize);
      
