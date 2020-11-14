@@ -1,4 +1,13 @@
-### Library 1.6.1
+### Library 1.6.4
+<p>
+Line/Half-Circle sensor rotation problem fixed. Thanks Chris Netter for pointing out (1.6.4)
+Improved double buffer cookie crumbs logic  Loop+TimeWarp,  reduced/eliminated residule crumbs...
+Set explode on out of bounds to false (in most demos - check LFS_G make sure false).
+<p>
+Added LFS_2Spot demo. Very simple 2 spot sensor demo with a few automated steps on dimming course for looped timewarp (1.6.3)
+<p>
+Carl Ott - Spotted Misplaced assignment (Zeroing D term in PD controller)  in SimpleBot Mecanum demos.
+Also MecanumDemo missing LFS_G.pde file.  (couple of quick fixes for 1.6.2)
 <p>
 Revised User's Guide Released,   LFS Users Guide 1.6 
 <p>
